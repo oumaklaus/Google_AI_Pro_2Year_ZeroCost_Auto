@@ -1,0 +1,18 @@
+{
+  "target_region": "US",
+  "target_plan": "pro_2year_zero",
+  "auto_cancel": true,
+  "proxy_template": "",
+  "card": {
+    "number": "",
+    "exp_month": "",
+    "exp_year": "",
+    "cvc": "",
+    "holder": "",
+    "address_line1": "",
+    "postal_code": "",
+    "locality": "",
+    "province": ""
+  },
+  "accounts": []
+}

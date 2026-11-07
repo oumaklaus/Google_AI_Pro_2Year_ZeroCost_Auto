@@ -1,0 +1,29 @@
+# Private configuration and credentials (use config.example.json as a template)
+/config.json
+/config.local.json
+.env
+.env.*
+!.env.example
+
+# Browser sessions, account screenshots, and local working artifacts
+/profiles/
+/screenshots/
+/artifacts/
+*.log
+
+# Python environments and generated files
+/.venv/
+/venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Local editor and desktop files
+/.idea/
+/.vscode/
+.DS_Store
+*~

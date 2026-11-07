@@ -5,15 +5,25 @@
 [Chinese original: README.md]
 
 [1. Runtime Requirements]
-1. Windows 10 / 11
-2. Google Chrome installed (default install path is fine)
-3. Python 3.10 or newer (tick "Add Python to PATH" during setup)
+1. Linux (tested on x86_64 with Chromium); macOS should also work
+2. Chromium or Google Chrome installed and on PATH (`chromium`, `google-chrome` or `chrome`),
+   or point the CHROME_PATH environment variable at the binary
+3. Python 3.10 or higher installed
 4. Network: enable a US proxy on this machine, or fill in the proxy template on the left of the console
 
 [2. Quick Start]
-1. First use: double-click [1_首次运行_安装依赖并启动.bat] (install dependencies and launch)
-2. Afterwards, just double-click [2_启动控制台.bat] (launch console)
-3. The browser opens the console automatically: http://127.0.0.1:8765
+1. Run the launcher once: ./run.sh
+   It creates a .venv, installs the dependencies, and starts the console.
+2. Later runs: ./run.sh again
+3. The console page opens automatically: http://127.0.0.1:8765
+   (If your desktop has no default browser opener, open that URL manually.)
+
+[Linux notes]
+- Chromium runs with `--no-sandbox` automatically when needed, and
+  `--password-store=basic --use-mock-keychain` so it never asks for a keyring.
+- Port cleanup uses `ss`/`lsof` and signals instead of netstat/taskkill.
+- Set HEADLESS=1 to add `--headless=new` to the browser arguments.
+- The original Windows .bat launchers are kept and still work on Windows.
 
 [3. Entering Your Payment Card & Running Accounts]
 1. Enter the payment card (required):
@@ -46,3 +56,9 @@
 # Card shop: https://faka.cdkey.si
 # Blog: https://blog.caowo.de
 # Telegram group: @Hello_Florence
+
+[Local configuration and Git privacy]
+- `config.example.json` is a template with no saved accounts or payment details.
+- The app creates a local `config.json` when settings are saved; it is intentionally ignored by Git.
+- Browser profiles, screenshots, local artifacts, logs, and Python environments are also ignored.
+- Keep private runtime data local; do not force-add ignored files.

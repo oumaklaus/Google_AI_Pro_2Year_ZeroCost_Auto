@@ -10,6 +10,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+from account_safety import account_run_lock_reason
 
 from automation_engine import (
     GoogleUltraAutomator,
@@ -21,6 +22,7 @@ from automation_engine import (
     CHROME_PATH,
     BASE_DIR,
     SCREENSHOTS_DIR,
+    CHROME_EXTRA_ARGS,
 )
 
 CONFIG_PATH = os.path.join(BASE_DIR, "config.json")
@@ -28,12 +30,12 @@ TEMPLATES_DIR = os.path.join(BASE_DIR, "templates")
 os.makedirs(TEMPLATES_DIR, exist_ok=True)
 os.makedirs(SCREENSHOTS_DIR, exist_ok=True)
 
-app = FastAPI(title="Google AI Pro (5 TB) 零成本两年全自动控制台")
+app = FastAPI(title="Google AI Pro (5 TB) Zero-Cost 2-Year Automation Console")
 app.mount("/screenshots", StaticFiles(directory=SCREENSHOTS_DIR), name="screenshots")
 
 # Global runtime state
 LOGS: List[str] = [
-    f"[{time.strftime('%H:%M:%S')}] [SYSTEM] 🚀 Google AI Pro (5 TB) 零成本两年 (US$0.00 -> 2028-10) 全自动控制台已就绪！"
+    f"[{time.strftime('%H:%M:%S')}] [SYSTEM] 🚀 Google AI Pro (5 TB) zero-cost 2-year (US$0.00 -> 2028-10) automation console is ready!"
 ]
 ACTIVE_TASKS: Dict[str, GoogleUltraAutomator] = {}
 BATCH_RUNNING: bool = False
@@ -85,6 +87,16 @@ class AccountActionReq(BaseModel):
     account_id: str
 
 
+def _require_unlocked_account(cfg: Dict[str, Any], account_id: str) -> Dict[str, Any]:
+    account = next((a for a in cfg.get("accounts", []) if a["id"] == account_id), None)
+    if account is None:
+        raise HTTPException(status_code=404, detail="Account not found")
+    reason = account_run_lock_reason(account)
+    if reason:
+        raise HTTPException(status_code=409, detail=reason)
+    return account
+
+
 @app.get("/", response_class=HTMLResponse)
 async def index():
     html_path = os.path.join(TEMPLATES_DIR, "index.html")
@@ -99,6 +111,8 @@ async def get_state():
     accounts_out = []
     for acc in cfg.get("accounts", []):
         item = dict(acc)
+        item["run_lock_reason"] = account_run_lock_reason(acc) or ""
+        item["run_locked"] = bool(item["run_lock_reason"])
         try:
             item["totp_now"] = get_totp(acc.get("totp_secret", ""))
         except Exception:
@@ -129,7 +143,7 @@ async def update_config(req: ConfigUpdateReq):
     cfg["proxy_template"] = req.proxy_template.strip()
     cfg["card"] = req.card
     save_config(cfg)
-    append_log(f"[{time.strftime('%H:%M:%S')}] [CONFIG] ✅ 已保存配置 (目标地区: {req.target_region} | 代理模板: {'已启用' if req.proxy_template.strip() else '系统默认'})")
+    append_log(f"[{time.strftime('%H:%M:%S')}] [CONFIG] ✅ Config saved (target region: {req.target_region} | proxy template: {'enabled' if req.proxy_template.strip() else 'system default'})")
     return {"ok": True}
 
 
@@ -145,7 +159,7 @@ async def test_proxy(req: ProxyTestReq):
     region = (req.target_region or cfg.get("target_region") or "TR").upper()
     resolved = resolve_account_proxy({"id": f"probe{int(time.time())%1000}", "email": "probe@gmail.com"}, region, tpl)
     if not resolved:
-        return {"ok": False, "message": "未填写代理模板"}
+        return {"ok": False, "message": "Proxy template is empty"}
 
     def _sync_probe():
         import urllib.request
@@ -174,12 +188,12 @@ async def test_proxy(req: ProxyTestReq):
         city = data.get("city", "")
         org = data.get("connection", {}).get("org", "")
         flag = "🇧🇴" if cc == "BO" else ("🇹🇷" if cc == "TR" else "🌐")
-        bal_str = f" | FloppyData 剩余流量: {bal_gb} GB" if bal_gb is not None else ""
-        msg = f"{flag} 连通成功！出口 IP: {ip} ({country} · {city} | {org}){bal_str}"
+        bal_str = f" | FloppyData traffic left: {bal_gb} GB" if bal_gb is not None else ""
+        msg = f"{flag} Connected! Exit IP: {ip} ({country} · {city} | {org}){bal_str}"
         append_log(f"[{time.strftime('%H:%M:%S')}] [PROXY] ✅ {msg}")
         return {"ok": True, "message": msg, "ip": ip, "country_code": cc, "balance_gb": bal_gb}
     except Exception as e:
-        err = f"代理测试失败: {e}"
+        err = f"Proxy test failed: {e}"
         append_log(f"[{time.strftime('%H:%M:%S')}] [PROXY] ❌ {err}")
         return {"ok": False, "message": err}
 
@@ -263,7 +277,7 @@ async def import_accounts(req: ImportAccountsReq):
                 "ip_info": "",
                 "status": "pending",
                 "current_step": 0,
-                "step_message": "新导入账号（待执行）",
+                "step_message": "Newly imported account (pending)",
                 "expiry_date": "-",
                 "last_screenshot": "",
             }
@@ -273,39 +287,36 @@ async def import_accounts(req: ImportAccountsReq):
 
     cfg["accounts"] = existing
     save_config(cfg)
-    append_log(f"[{time.strftime('%H:%M:%S')}] [IMPORT] ✅ 成功导入/更新 {added} 个账号（当前共 {len(existing)} 个账号）")
+    append_log(f"[{time.strftime('%H:%M:%S')}] [IMPORT] ✅ Imported/updated {added} account(s) ({len(existing)} total)")
     return {"ok": True, "added": added, "total": len(existing)}
 
 
 @app.post("/api/accounts/delete")
 async def delete_account(req: AccountActionReq):
     if req.account_id in ACTIVE_TASKS:
-        raise HTTPException(status_code=400, detail="该账号正在运行中，请先停止任务")
+        raise HTTPException(status_code=400, detail="This account is running, stop the task first")
     cfg = load_config()
     cfg["accounts"] = [a for a in cfg.get("accounts", []) if a["id"] != req.account_id]
     save_config(cfg)
-    append_log(f"[{time.strftime('%H:%M:%S')}] [ACCOUNT] 🗑️ 已移除账号 {req.account_id}")
+    append_log(f"[{time.strftime('%H:%M:%S')}] [ACCOUNT] 🗑️ Removed account {req.account_id}")
     return {"ok": True}
 
 
 @app.post("/api/accounts/reset")
 async def reset_account(req: AccountActionReq):
+    if req.account_id in ACTIVE_TASKS:
+        raise HTTPException(status_code=409, detail="Stop this account before resetting it")
     cfg = load_config()
-    for a in cfg.get("accounts", []):
-        if a["id"] == req.account_id:
-            a["status"] = "pending"
-            a["current_step"] = 0
-            a["step_message"] = "已重置状态（待执行）"
-            break
+    a = _require_unlocked_account(cfg, req.account_id)
+    a["status"] = "pending"
+    a["current_step"] = 0
+    a["step_message"] = "State reset (pending)"
     save_config(cfg)
-    append_log(f"[{time.strftime('%H:%M:%S')}] [ACCOUNT] 🔄 已重置账号 {req.account_id} 状态为待执行")
+    append_log(f"[{time.strftime('%H:%M:%S')}] [ACCOUNT] 🔄 Reset account {req.account_id} to pending")
     return {"ok": True}
 
 
 async def _run_account_worker(account_id: str, start_step: int = 1, port: int = 9320):
-    import importlib
-    import automation_engine
-    importlib.reload(automation_engine)
     cfg = load_config()
     target_acc = None
     for a in cfg.get("accounts", []):
@@ -314,6 +325,15 @@ async def _run_account_worker(account_id: str, start_step: int = 1, port: int = 
             break
     if not target_acc:
         return
+    # Recheck at execution time: an account may have been locked while queued.
+    reason = account_run_lock_reason(target_acc)
+    if reason:
+        append_log(f"[{time.strftime('%H:%M:%S')}] [GUARD] Run blocked for {account_id}: {reason}")
+        return
+
+    import importlib
+    import automation_engine
+    importlib.reload(automation_engine)
 
     def on_state_patch(patch: Dict[str, Any]):
         c = load_config()
@@ -344,7 +364,8 @@ async def _run_account_worker(account_id: str, start_step: int = 1, port: int = 
 @app.post("/api/run/single")
 async def run_single(req: RunSingleReq):
     if req.account_id in ACTIVE_TASKS:
-        raise HTTPException(status_code=400, detail="该账号已经在运行中")
+        raise HTTPException(status_code=400, detail="This account is already running")
+    _require_unlocked_account(load_config(), req.account_id)
     port = 9320 + (len(ACTIVE_TASKS) % 10)
     asyncio.create_task(_run_account_worker(req.account_id, start_step=req.start_step, port=port))
     return {"ok": True}
@@ -354,35 +375,37 @@ async def run_single(req: RunSingleReq):
 async def run_batch(req: RunBatchReq):
     global BATCH_RUNNING, STOP_BATCH
     if BATCH_RUNNING:
-        raise HTTPException(status_code=400, detail="批量队列已经在运行中")
+        raise HTTPException(status_code=400, detail="The batch queue is already running")
 
     cfg = load_config()
-    if req.account_ids:
-        queue_ids = req.account_ids
-    else:
-        queue_ids = [a["id"] for a in cfg.get("accounts", []) if a.get("status") != "completed"]
+    accounts = {a["id"]: a for a in cfg.get("accounts", [])}
+    requested_ids = req.account_ids if req.account_ids is not None else list(accounts)
+    if any(aid not in accounts for aid in requested_ids):
+        raise HTTPException(status_code=404, detail="A requested account was not found")
+    skipped_locked = [aid for aid in requested_ids if account_run_lock_reason(accounts[aid])]
+    queue_ids = [aid for aid in requested_ids if not account_run_lock_reason(accounts[aid])]
 
     if not queue_ids:
-        raise HTTPException(status_code=400, detail="没有待执行的账号（已完成的账号如需重跑请先点重置）")
+        raise HTTPException(status_code=409, detail="No eligible accounts: locked or completed accounts cannot be run")
 
     async def _batch_runner():
         global BATCH_RUNNING, STOP_BATCH
         BATCH_RUNNING = True
         STOP_BATCH = False
-        append_log(f"[{time.strftime('%H:%M:%S')}] [BATCH] 🚀 开始批量一条龙执行队列: {queue_ids} (起始步骤: Step {req.start_step})")
+        append_log(f"[{time.strftime('%H:%M:%S')}] [BATCH] 🚀 Starting batch queue: {queue_ids} (start step: Step {req.start_step})")
         try:
             for idx, aid in enumerate(queue_ids):
                 if STOP_BATCH:
-                    append_log(f"[{time.strftime('%H:%M:%S')}] [BATCH] ⏹ 批量队列已按用户要求停止")
+                    append_log(f"[{time.strftime('%H:%M:%S')}] [BATCH] ⏹ Batch queue stopped on user request")
                     break
                 await _run_account_worker(aid, start_step=req.start_step, port=9330 + (idx % 5))
                 await asyncio.sleep(2)
         finally:
             BATCH_RUNNING = False
-            append_log(f"[{time.strftime('%H:%M:%S')}] [BATCH] 🏁 批量执行队列已结束")
+            append_log(f"[{time.strftime('%H:%M:%S')}] [BATCH] 🏁 Batch queue finished")
 
     asyncio.create_task(_batch_runner())
-    return {"ok": True, "queued": queue_ids}
+    return {"ok": True, "queued": queue_ids, "skipped_locked": skipped_locked}
 
 
 @app.post("/api/stop")
@@ -391,11 +414,11 @@ async def stop_all(req: Optional[AccountActionReq] = None):
     STOP_BATCH = True
     if req and req.account_id and req.account_id in ACTIVE_TASKS:
         ACTIVE_TASKS[req.account_id].stop_requested = True
-        append_log(f"[{time.strftime('%H:%M:%S')}] [STOP] ⏹ 正在停止账号 {req.account_id}...")
+        append_log(f"[{time.strftime('%H:%M:%S')}] [STOP] ⏹ Stopping account {req.account_id}...")
     else:
         for aid, task in list(ACTIVE_TASKS.items()):
             task.stop_requested = True
-        append_log(f"[{time.strftime('%H:%M:%S')}] [STOP] ⏹ 已发送全局停止指令")
+        append_log(f"[{time.strftime('%H:%M:%S')}] [STOP] ⏹ Global stop signal sent")
     return {"ok": True}
 
 
@@ -404,8 +427,11 @@ MANUAL_BRIDGES: Dict[str, LocalHttpProxyAuthBridge] = {}
 
 def _launch_on_interactive_desktop(args: List[str]):
     """
-    Launch a GUI process (e.g. Chrome) explicitly onto the user's interactive desktop (winsta0\\default)
-    even if the backend server was started inside an isolated/background desktop session (e.g. exebox).
+    Launch a GUI process (e.g. Chrome) detached from this console.
+
+    Windows: spawn it explicitly onto the user's interactive desktop (winsta0\\default),
+    even if the backend was started inside an isolated/background desktop session (e.g. exebox).
+    Linux/macOS: start it in its own session (setsid) so it survives the console exiting.
     """
     if os.name == "nt":
         try:
@@ -468,15 +494,41 @@ def _launch_on_interactive_desktop(args: List[str]):
                 return
         except Exception:
             pass
-    subprocess.Popen(args)
+        subprocess.Popen(args)
+        return
+
+    # Linux / macOS: detach into its own session so closing the console keeps the window alive.
+    subprocess.Popen(
+        args,
+        start_new_session=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+
+def _open_console_url(url: str = "http://127.0.0.1:8765") -> None:
+    """Open the console URL in the user's default browser (Linux/macOS, best effort)."""
+    for cmd in (["xdg-open", url], ["gio", "open", url], ["sensible-browser", url]):
+        if shutil.which(cmd[0]):
+            try:
+                subprocess.Popen(
+                    cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True
+                )
+                return
+            except Exception:
+                continue
+    try:
+        import webbrowser
+
+        webbrowser.open(url)
+    except Exception:
+        pass
 
 
 @app.post("/api/open_browser")
 async def open_browser_manual(req: AccountActionReq):
     cfg = load_config()
-    target_acc = next((a for a in cfg.get("accounts", []) if a["id"] == req.account_id), None)
-    if not target_acc:
-        raise HTTPException(status_code=404, detail="账号不存在")
+    target_acc = _require_unlocked_account(cfg, req.account_id)
 
     user_data_dir = get_profile_dir(target_acc["id"], target_acc["email"])
     target_region = cfg.get("target_region", "US")
@@ -492,6 +544,7 @@ async def open_browser_manual(req: AccountActionReq):
         "--webrtc-ip-handling-policy=disable_non_proxied_udp",
         "--enforce-webrtc-ip-permission-check",
         "--start-maximized",
+        *CHROME_EXTRA_ARGS,
     ]
 
     if parsed_proxy:
@@ -520,11 +573,17 @@ async def open_browser_manual(req: AccountActionReq):
     )
     _launch_on_interactive_desktop(chrome_args)
     append_log(
-        f"[{time.strftime('%H:%M:%S')}] [BROWSER] 🌐 已为您手动打开 [{target_acc['id']}] ({target_acc['email']}) 的专属 Chrome 窗口"
+        f"[{time.strftime('%H:%M:%S')}] [BROWSER] 🌐 Opened the dedicated Chrome window for [{target_acc['id']}] ({target_acc['email']}) manually"
     )
     return {"ok": True}
 
 
 if __name__ == "__main__":
+    import threading
     import uvicorn
+
+    if os.name != "nt":
+        threading.Timer(
+            1.5, _open_console_url, args=("http://127.0.0.1:8765",)
+        ).start()
     uvicorn.run(app, host="127.0.0.1", port=8765, log_level="warning")

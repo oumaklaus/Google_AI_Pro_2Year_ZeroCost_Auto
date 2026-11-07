@@ -1,48 +1,65 @@
-English translation: [README_EN.md](./README_EN.md)
+Chinese original of the Windows project: keep `README.md` in the Windows copy for that; this is the Linux copy's English README.
 
 ========================================================================
-  Google AI Pro (5 TB) 零成本两年 (US$0.00 -> 24个月) 全自动控制台
+  Google AI Pro (5 TB) Zero Cost 2 Years (US$0.00 -> 24 months) Fully Automatic Console
 ========================================================================
 
-【一、运行环境要求】
-1. Windows 10 / 11 系统
-2. 已安装 Google Chrome 浏览器（默认路径即可）
-3. 已安装 Python 3.10 或更高版本（安装时勾选 Add Python to PATH）
-4. 网络环境：本机开启美区（US）代理，或在控制台左侧填写代理模板
+[1. Runtime Requirements]
+1. Linux (verified on x86_64 with Chromium); macOS should also work
+2. Chromium or Google Chrome installed and on PATH (`chromium`, `google-chrome` or `chrome`),
+   or point the CHROME_PATH environment variable at the browser binary
+3. Python 3.10 or higher installed
+4. Network: enable a US proxy on this machine, or fill in the proxy template in the console
 
-【二、快速启动步骤】
-1. 首次使用请双击运行：【1_首次运行_安装依赖并启动.bat】
-2. 之后日常使用直接双击：【2_启动控制台.bat】
-3. 浏览器会自动打开控制台页面：http://127.0.0.1:8765
+[2. Quick Start Steps]
+1. First run: ./run.sh  (creates .venv, installs the dependencies and starts the console)
+2. Daily use: ./run.sh again
+3. The console is served at: http://127.0.0.1:8765
+   (If your desktop has no default browser opener, open that address manually)
 
-【三、自定义填写支付卡 & 跑号说明】
-1. 填写支付卡（必填）：
-   - 在网页左侧【全局配置与内联免税绑卡】区域，填入你自己的 Visa 或 Mastercard 外币卡：
-     * 卡号（16位数字）
-     * 有效期（月 / 年，如 08 / 29）
-     * 安全码（3位 CVC）
-     * 持卡人英文姓名
-     * 免税邮编默认已填好 97201（美国俄勒冈免税州），无需修改
-   - 填写后点击【💾 保存配置】。
-   - 注：脚本内置严格 0 元消费保护，仅在结账弹窗确认为 US$0.00 时才会点击订阅，全程 0 扣费。
+[Linux notes]
+- Chromium is started with --no-sandbox when needed, plus --password-store=basic --use-mock-keychain
+  so no keyring dialog pops up.
+- Port cleanup uses ss/lsof plus signals, no longer netstat/taskkill.
+- Set HEADLESS=1 to append --headless=new to the browser arguments.
+- The original Windows .bat launchers are kept and still work on Windows.
 
-2. 批量导入 Google 账号：
-   - 在网页右侧【批量放号导入区】粘贴账号（每行一个），支持以下任意格式：
-     * 邮箱----密码----辅助邮箱
-     * 邮箱----密码----辅助邮箱----2FA密钥
-     * 邮箱----密码----2FA密钥
-   - 点击【➕ 一键导入账号列表】。
+[3. Filling In a Payment Card & Running Accounts]
+1. Fill in the payment card (required):
+   - In the [Global config, tax-free region, zero-cost 2-year Pro plan & card settings] area on the left,
+     enter your own Visa or Mastercard foreign-currency card:
+     * Card number (16 digits)
+     * Expiry (month / year, e.g. 08 / 29)
+     * Security code (3-digit CVC)
+     * Cardholder name in Latin letters
+     * The tax-free ZIP is pre-filled with 97201 (Oregon, a US tax-free state), no need to change
+   - Then click [Save config].
+   - Note: the script has a strict built-in zero-cost guard; it only clicks subscribe when the checkout
+     popup confirms US$0.00, so nothing is charged at any point.
 
-3. 开始全自动执行：
-   - 点击单个账号右侧的【▶ 执行】或顶部的【▶ 批量全自动执行】。
-   - 脚本会自动完成：
-     Step 1: 自动登录 Google 并通过辅助邮箱 / 2FA 验证
-     Step 2: 内联免税绑卡 + 首层 12 个月免费包 (US$0.00)
-     Step 3: 叠加二层 6 个月免费包 (US$0.00 -> 18个月)
-     Step 4: 叠加三层 6 个月免费包 (US$0.00 -> 24个月封顶)
-     Step 5: 自动前往 Google Play 取消自动续订，锁死 2 年到期权益并截图验真
+2. Bulk import Google accounts:
+   - Paste accounts (one per line) into the [Bulk account import] area on the right; any separator works:
+     * email----password----recovery email
+     * email----password----recovery email----2FA secret
+     * email----password----2FA secret
+   - Click [Import accounts].
+
+3. Start the fully automatic run:
+   - Click [Run] next to a single account, or [Run all pending accounts] at the top.
+   - The script automatically performs:
+     Step 1: sign in to Google and pass recovery email / 2FA verification
+     Step 2: inline tax-free card binding + layer 1 12-month free bundle (US$0.00)
+     Step 3: stack layer 2 6-month free bundle (US$0.00 -> 18 months)
+     Step 4: stack layer 3 6-month free bundle (US$0.00 -> 24 months cap)
+     Step 5: go to Google Play, cancel auto-renewal, lock in the 2-year expiry and screenshot it as proof
 
 
-# 卡网：https://faka.cdkey.si
-# 博客：https://blog.caowo.de
-# TG群：@Hello_Florence
+# Card shop: https://faka.cdkey.si
+# Blog: https://blog.caowo.de
+# TG group: @Hello_Florence
+
+[Local configuration and Git privacy]
+- `config.example.json` is a template with no saved accounts or payment details.
+- The app creates a local `config.json` when settings are saved; it is intentionally ignored by Git.
+- Browser profiles, screenshots, local artifacts, logs, and Python environments are also ignored.
+- Keep private runtime data local; do not force-add ignored files.
