@@ -2,7 +2,10 @@
   Google AI Pro (5 TB) Zero Cost for Two Years (US$0.00 -> 24 months) Fully Automated Console
 ========================================================================
 
-[Chinese original: README.md]
+The main English guide is [README.md](README.md). See its
+[Usage section](README.md#2-usage) for launch commands, console controls, and
+troubleshooting, and its [language notes](README.md#language-and-automation-compatibility)
+for why Google-page matching strings remain multilingual.
 
 [1. Runtime Requirements]
 1. Linux (tested on x86_64 with Chromium); macOS should also work
@@ -22,7 +25,8 @@
 - Chromium runs with `--no-sandbox` automatically when needed, and
   `--password-store=basic --use-mock-keychain` so it never asks for a keyring.
 - Port cleanup uses `ss`/`lsof` and signals instead of netstat/taskkill.
-- Set HEADLESS=1 to add `--headless=new` to the browser arguments.
+- Chromium adds `--headless=new` when no X11/Wayland display is available.
+  `HEADLESS=1` is not a supported setting in the current code.
 - The original Windows .bat launchers are kept and still work on Windows.
 
 [3. Entering Your Payment Card & Running Accounts]
@@ -33,7 +37,7 @@
      * Security code (3-digit CVC)
      * Cardholder name in Latin letters
      * The tax-exempt ZIP code is pre-filled with 97201 (Oregon, a US tax-free state); no change needed
-   - Then click [💾 保存配置] (save configuration).
+   - Then click [💾 Save config].
    - Note: the script has a strict zero-charge guard. It only clicks subscribe when the checkout popup confirms US$0.00, so nothing is charged.
 
 2. Bulk import Google accounts:
@@ -41,10 +45,10 @@
      * email----password----recovery email
      * email----password----recovery email----2FA secret
      * email----password----2FA secret
-   - Click [➕ 一键导入账号列表] (import account list in one click).
+   - Click [➕ Import accounts].
 
 3. Start the fully automated run:
-   - Click [▶ 执行] (run) next to a single account, or [▶ 批量全自动执行] (run all automatically) at the top.
+   - Click [▶ Run] next to a single account, or [▶ Run all pending accounts] at the top.
    - The script automatically does:
      Step 1: Sign in to Google and pass recovery-email / 2FA verification
      Step 2: Inline tax-exempt card binding + first-layer 12-month free bundle (US$0.00)
